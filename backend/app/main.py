@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.routes.agent import router as agent_router
 from app.routes.roads import router as roads_router
 from app.routes.risk import router as risk_router
 from app.routes.tides import router as tides_router
@@ -11,6 +12,7 @@ app.include_router(tides_router)
 app.include_router(weather_router)
 app.include_router(roads_router)
 app.include_router(risk_router)
+app.include_router(agent_router)
 
 
 @app.get("/api/health")

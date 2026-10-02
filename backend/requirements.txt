@@ -1,5 +1,6 @@
 fastapi
 httpx
+openai
 tzdata
 uvicorn
 pytest

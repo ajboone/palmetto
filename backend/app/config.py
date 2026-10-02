@@ -21,6 +21,9 @@ CHARLESTON_GIS_MAPSERVER = (
 )
 CHARLESTON_GIS_TIMEOUT_SECONDS = 10.0
 
+PALMETTO_OPENAI_MODEL = os.getenv("PALMETTO_OPENAI_MODEL", "gpt-5-mini")
+PALMETTO_AGENT_MAX_TOOL_ITERATIONS = 6
+
 # PALMETTO prototype rules; these are not government flood thresholds.
 RISK_COMPONENT_WEIGHTS = {
 	"water_level": 30,
