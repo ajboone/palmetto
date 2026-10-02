@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 from app.agent.service import AgentIterationLimitError, run_agent_query
+from app.agent.instructions import PALMETTO_AGENT_INSTRUCTIONS
 from app.agent.tools import (
     EMPTY_OBJECT_SCHEMA,
     PALMETTO_TOOLS,
@@ -77,6 +78,24 @@ def test_registered_tools_are_narrow_strict_empty_object_functions() -> None:
     }
     assert all(tool["type"] == "function" and tool["strict"] for tool in PALMETTO_TOOLS)
     assert all(tool["parameters"] == EMPTY_OBJECT_SCHEMA for tool in PALMETTO_TOOLS)
+
+
+def test_agent_instructions_require_concise_actionable_evidence_and_uncertainty() -> None:
+    instructions = " ".join(PALMETTO_AGENT_INSTRUCTIONS.casefold().split())
+
+    for section in (
+        "bottom line",
+        "what palmetto found",
+        "recommended action",
+        "confidence",
+    ):
+        assert section in instructions
+    assert "100-180 words" in instructions
+    assert "never recalculate, alter, or override that score" in instructions
+    assert "risk category is null" in instructions
+    assert "flood-related impacts from other" in instructions
+    assert "never invent an exact" in instructions
+    assert "structured response already preserves tools_used and limitations" in instructions
 
 
 def test_simple_response_without_tool_calls_returns_output_text() -> None:
