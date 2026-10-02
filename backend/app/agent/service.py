@@ -28,15 +28,42 @@ def _value(item: Any, key: str) -> Any:
     return getattr(item, key, None)
 
 
-def _output_item_for_input(item: Any) -> dict[str, Any]:
+def _output_item_for_input(item: Any) -> dict[str, Any] | None:
     if isinstance(item, dict):
-        return item
-    model_dump = getattr(item, "model_dump", None)
-    if callable(model_dump):
-        serialized = model_dump(mode="json")
-        if isinstance(serialized, dict):
-            return serialized
-    raise AgentServiceError("OpenAI returned an unsupported response item.")
+        serialized = item
+    else:
+        model_dump = getattr(item, "model_dump", None)
+        serialized = model_dump(mode="json") if callable(model_dump) else None
+    if not isinstance(serialized, dict):
+        raise AgentServiceError("OpenAI returned an unsupported response item.")
+
+    item_type = serialized.get("type")
+    if item_type == "function_call":
+        required_fields = ("call_id", "name", "arguments")
+        if any(not isinstance(serialized.get(field), str) for field in required_fields):
+            raise AgentServiceError("OpenAI returned a malformed function call.")
+        return {
+            "type": "function_call",
+            "call_id": serialized["call_id"],
+            "name": serialized["name"],
+            "arguments": serialized["arguments"],
+        }
+
+    if item_type == "reasoning":
+        # These are the reasoning fields accepted on continuation input; response
+        # metadata such as status is output-only and must not be replayed.
+        reasoning_fields = ("id", "summary", "content", "encrypted_content")
+        continuation = {"type": "reasoning"}
+        continuation.update(
+            {
+                field: serialized[field]
+                for field in reasoning_fields
+                if field in serialized
+            }
+        )
+        return continuation
+
+    return None
 
 
 async def run_agent_query(
@@ -74,7 +101,11 @@ async def run_agent_query(
         output_items = _value(response, "output")
         if not isinstance(output_items, (list, tuple)):
             raise AgentServiceError("OpenAI returned a malformed response.")
-        input_items.extend(_output_item_for_input(item) for item in output_items)
+        input_items.extend(
+            continuation_item
+            for item in output_items
+            if (continuation_item := _output_item_for_input(item)) is not None
+        )
         function_calls = [
             item for item in output_items if _value(item, "type") == "function_call"
         ]

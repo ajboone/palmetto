@@ -61,6 +61,7 @@ def function_call(name, call_id, arguments="{}"):
         call_id=call_id,
         arguments=arguments,
         id=f"fc_{call_id}",
+        status="completed",
     )
 
 
@@ -101,7 +102,21 @@ def test_flood_risk_tool_round_trips_matching_call_id_and_preserves_output_items
     client = fake_client(
         FakeResponse(
             [
-                OutputItem(type="reasoning", id="rs_1", summary=[]),
+                OutputItem(
+                    type="reasoning",
+                    id="rs_1",
+                    summary=[],
+                    content=[{"type": "reasoning_text", "text": "checking evidence"}],
+                    status="completed",
+                    encrypted_content="encrypted-reasoning-payload",
+                ),
+                OutputItem(
+                    type="message",
+                    id="msg_1",
+                    role="assistant",
+                    status="completed",
+                    content=[],
+                ),
                 function_call("get_flood_risk", "call-risk"),
             ]
         ),
@@ -124,14 +139,27 @@ def test_flood_risk_tool_round_trips_matching_call_id_and_preserves_output_items
     assert result.tools_used == ["get_flood_risk"]
     assert result.tool_call_count == 1
     continuation = client.responses.requests[1]["input"]
-    assert continuation[1] == {"type": "reasoning", "id": "rs_1", "summary": []}
-    assert continuation[2]["type"] == "function_call"
+    assert continuation[1] == {
+        "type": "reasoning",
+        "id": "rs_1",
+        "summary": [],
+        "content": [{"type": "reasoning_text", "text": "checking evidence"}],
+        "encrypted_content": "encrypted-reasoning-payload",
+    }
+    assert continuation[2] == {
+        "type": "function_call",
+        "call_id": "call-risk",
+        "name": "get_flood_risk",
+        "arguments": "{}",
+    }
     assert continuation[3]["type"] == "function_call_output"
     assert continuation[3]["call_id"] == "call-risk"
     assert json.loads(continuation[3]["output"]) == {
         "risk_level": "LOW",
         "score": 5,
     }
+    assert all("status" not in item for item in continuation[1:])
+    assert all(item.get("type") != "message" for item in continuation[1:])
 
 
 def test_multiple_function_calls_are_all_executed_and_returned() -> None:
@@ -182,6 +210,7 @@ def test_multiple_function_calls_are_all_executed_and_returned() -> None:
         if item.get("type") == "function_call_output"
     ]
     assert [item["call_id"] for item in outputs] == ["call-water", "call-alerts"]
+    assert all("status" not in item for item in client.responses.requests[1]["input"])
 
 
 def test_dispatch_parses_empty_json_arguments_and_serializes_pydantic() -> None:
@@ -327,7 +356,7 @@ def test_agent_endpoint_returns_agent_response_without_openai_call(
         "answer": "Use official sources before travel.",
         "tools_used": [],
         "tool_call_count": 0,
-        "model": "gpt-5-mini",
+        "model": agent_route.PALMETTO_OPENAI_MODEL,
         "limitations": [],
     }
 
