@@ -39,6 +39,7 @@ NOAA uses station `8665530` by default; override it with `PALMETTO_NOAA_STATION_
 - `GET /api/weather/alerts` returns active NWS alerts for the configured point.
 - `GET /api/roads/impacts` returns active road closures, emergency closures, and detours from City of Charleston GIS layers 1, 5, and 2.
 - `GET /api/risk/current` returns the current structured PALMETTO Charleston flood-risk assessment and component explanations.
+- `POST /api/agent/query` investigates a question using the OpenAI Responses API and PALMETTO's read-only data tools.
 
 ## PALMETTO Flood Risk Engine
 
@@ -49,3 +50,31 @@ Water-level and tide thresholds default to 4, 5, and 6 feet relative to MLLW; up
 Unavailable evidence is represented on each component and listed in `unavailable_sources`. The numeric score is the subtotal of available component evidence. If any component is incomplete or unavailable, the overall evidence status is PARTIAL or UNAVAILABLE and the categorical `risk_level` is withheld rather than treating missing inputs as safe. Road-impact scoring counts active records; it identifies flood-related impacts only when the source text explicitly indicates flooding or high water.
 
 LOW, MODERATE, HIGH, and SEVERE are PALMETTO prototype decision-support categories. They are NOT official NOAA, NWS, FEMA, or City of Charleston flood classifications. PALMETTO is not an official emergency warning system and must not be relied upon for emergency response or evacuation decisions.
+
+## PALMETTO AI Agent
+
+The agent uses the OpenAI Responses API to choose among narrow PALMETTO function tools. A trusted Python dispatcher invokes the existing NOAA, NWS, Charleston GIS, and deterministic risk services directly; normalized evidence is returned to the model for a concise, grounded explanation. The model contextualizes evidence but never calculates or overrides PALMETTO's deterministic risk score. Missing or degraded evidence is surfaced rather than treated as safe. All agent tools are read-only.
+
+Set these environment variables before starting the backend:
+
+- `OPENAI_API_KEY` supplies the OpenAI API credential. Never put the key in source control or chat.
+- `PALMETTO_OPENAI_MODEL` selects the Responses API model; the default is `gpt-5-mini`.
+
+The `.env` pattern is ignored by Git, but PALMETTO reads the API key directly from the environment and does not require a `.env` file or `python-dotenv`.
+
+In Git Bash, set the key for the current terminal session without saving it to a file:
+
+```bash
+read -rsp 'OpenAI API key: ' OPENAI_API_KEY; printf '\n'; export OPENAI_API_KEY
+export PALMETTO_OPENAI_MODEL=gpt-5-mini
+```
+
+Start the backend from `palmetto/backend` with `uvicorn app.main:app --reload`, then open `http://127.0.0.1:8000/docs`. Expand `POST /api/agent/query`, choose **Try it out**, and submit:
+
+```json
+{
+	"question": "What should I know about flooding in Charleston today?"
+}
+```
+
+The agent response includes its answer, tool names used, tool-call count, model ID, and sanitized tool limitations. Automated tests mock the Responses API and external data providers.
